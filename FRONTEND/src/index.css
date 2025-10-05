@@ -1,0 +1,253 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* KYC Verification System Design System - Dark Modern Theme */
+
+@layer base {
+  :root {
+    /* Core Dark Theme Colors */
+    --background: 220 13% 5%;
+    --background-secondary: 220 13% 10%;
+    --foreground: 210 20% 98%;
+    
+    /* Card & Surface Colors */
+    --card: 220 13% 12%;
+    --card-foreground: 210 20% 98%;
+    --card-hover: 220 13% 15%;
+    
+    /* Form & Input Colors */
+    --input-bg: 220 13% 8%;
+    --input-border: 220 13% 20%;
+    --input-focus: 220 100% 60%;
+    
+    /* Primary Gradient System */
+    --primary-start: 217 91% 60%;
+    --primary-end: 262 83% 58%;
+    --primary-foreground: 210 20% 98%;
+    
+    /* Secondary Colors */
+    --secondary: 220 13% 15%;
+    --secondary-foreground: 210 20% 98%;
+    --secondary-border: 220 13% 25%;
+    
+    /* Success & Error States */
+    --success: 159 75% 42%;
+    --success-foreground: 210 20% 98%;
+    --error: 0 72% 51%;
+    --error-foreground: 210 20% 98%;
+    
+    /* Muted & Accent */
+    --muted: 220 13% 18%;
+    --muted-foreground: 220 9% 83%;
+    --accent: 220 13% 15%;
+    --accent-foreground: 210 20% 98%;
+    
+    /* Border & Ring */
+    --border: 220 13% 20%;
+    --border-light: 220 13% 25%;
+    --ring: 217 91% 60%;
+    
+    /* Glow Effects */
+    --glow-primary: 217 91% 60%;
+    --glow-success: 159 75% 42%;
+    --glow-error: 0 72% 51%;
+    
+    /* Progress & Status */
+    --progress-bg: 220 13% 18%;
+    --progress-fill: 217 91% 60%;
+    
+    /* Radius */
+    --radius: 0.75rem;
+    --radius-lg: 1rem;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--background)) 0%,
+      hsl(var(--background-secondary)) 100%
+    );
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-background;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}
+
+@layer components {
+  /* Gradient Button */
+  .btn-gradient {
+    @apply relative overflow-hidden rounded-xl font-semibold transition-all duration-300;
+    background: linear-gradient(135deg, hsl(var(--primary-start)) 0%, hsl(var(--primary-end)) 100%);
+    box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.3);
+  }
+
+  .btn-gradient:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px hsl(var(--glow-primary) / 0.6), 0 0 60px hsl(var(--glow-primary) / 0.4);
+    filter: brightness(1.1);
+  }
+
+  .btn-gradient:active {
+    transform: translateY(0);
+    box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.4);
+  }
+
+  /* Secondary Button */
+  .btn-secondary {
+    @apply bg-secondary border border-secondary-border text-secondary-foreground rounded-xl font-semibold transition-all duration-300;
+    box-shadow: 0 0 10px hsl(var(--border) / 0.2);
+  }
+
+  .btn-secondary:hover {
+    @apply bg-secondary/80 border-border-light;
+    transform: translateY(-1px);
+    box-shadow: 0 0 20px hsl(var(--border) / 0.4);
+  }
+
+  /* Success Button */
+  .btn-success {
+    @apply bg-success text-success-foreground rounded-xl font-semibold transition-all duration-300;
+    box-shadow: 0 0 15px hsl(var(--glow-success) / 0.3);
+  }
+
+  .btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px hsl(var(--glow-success) / 0.5), 0 0 40px hsl(var(--glow-success) / 0.3);
+    filter: brightness(1.1);
+  }
+
+  /* Social Login Button */
+  .btn-social {
+    @apply bg-card border border-border text-foreground rounded-xl font-medium transition-all duration-300 hover:bg-card-hover;
+    box-shadow: 0 0 10px hsl(var(--border) / 0.2);
+  }
+
+  .btn-social:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 20px hsl(var(--border) / 0.4);
+    border-color: hsl(var(--border-light));
+  }
+
+  /* Active Nav Link */
+  .nav-link-active {
+    position: relative;
+  }
+
+  .nav-link-active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(135deg, hsl(var(--primary-start)) 0%, hsl(var(--primary-end)) 100%);
+    border-radius: 1px;
+    box-shadow: 0 0 8px hsl(var(--glow-primary) / 0.6);
+  }
+
+  /* Glass Card */
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border rounded-xl shadow-2xl;
+    background: linear-gradient(135deg, hsl(var(--card) / 0.8) 0%, hsl(var(--card) / 0.6) 100%);
+  }
+
+  /* Input */
+  .input-kyc {
+    @apply bg-input-bg border border-input-border rounded-lg px-4 py-3 text-foreground placeholder:text-muted-foreground transition-all duration-200;
+  }
+
+  .input-kyc:focus {
+    @apply border-input-focus ring-2 ring-input-focus/20 outline-none;
+  }
+
+  /* Progress */
+  .progress-kyc {
+    @apply w-full h-2 bg-progress-bg rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full bg-gradient-to-r from-primary-start to-primary-end transition-all duration-500 ease-out;
+  }
+
+  /* Animations */
+  .fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .slide-up {
+    animation: slideUp 0.6s ease-out forwards;
+  }
+
+  .glow-pulse {
+    animation: glowPulse 2s ease-in-out infinite;
+  }
+
+  .success-check {
+    animation: successCheck 0.8s ease-out forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px hsl(var(--glow-primary) / 0.6);
+  }
+}
+
+@keyframes successCheck {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-45deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) rotate(-45deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-45deg);
+  }
+}

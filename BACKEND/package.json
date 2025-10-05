@@ -1,0 +1,38 @@
+{
+  "name": "kyc-backend",
+  "version": "1.0.0",
+  "description": "Ethereum Blockchain-Based KYC Verification System Backend",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ethereum",
+    "kyc",
+    "blockchain",
+    "ipfs",
+    "express"
+  ],
+  "author": "KYC Backend Team",
+  "license": "MIT",
+  "dependencies": {
+    "@pinata/sdk": "^2.1.0",
+    "axios": "^1.12.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.6.1",
+    "ethers": "^6.15.0",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.18.3",
+    "multer": "^1.4.5-lts.1",
+    "pinata-web3": "^0.5.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
