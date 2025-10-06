@@ -31,10 +31,11 @@ const Auth = () => {
   const mutation = useMutation<AuthResponse, Error, { email: string; password: string }>({
     mutationFn: ({ email, password }) => login(email, password),
     onSuccess: (data) => {
-      localStorage.setItem("token", data.token);
+      const fetchData = data.data
+      localStorage.setItem("token", fetchData.token);
       toast({
         title: "✅ Login Successful",
-        description: `Welcome back, ${data.user.email}`,
+        description: `Welcome back, ${fetchData.user.email}`,
       });
       navigate("/submit-identity");
     },
