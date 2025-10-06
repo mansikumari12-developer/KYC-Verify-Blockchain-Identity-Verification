@@ -18,7 +18,6 @@ const login = async (email: string, password: string): Promise<AuthResponse> => 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  console.log(res)
   if (!res.ok) throw new Error("Login failed");
   return res.json() as Promise<AuthResponse>;
 };
