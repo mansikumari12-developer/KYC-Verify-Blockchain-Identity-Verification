@@ -14,12 +14,14 @@ const SubmitIdentity = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const token = localStorage.getItem("token")
+    console.log(token)
     try {
       const res = await fetch("/api/identity/submit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
@@ -29,7 +31,7 @@ const SubmitIdentity = () => {
         title: "✅ Identity Submitted",
         description: data.message, // ✅ TS knows "message"
       });
-      navigate("/upload-docs");
+      // navigate("/upload-docs");
     } catch {
       toast({
         title: "Submission Failed",

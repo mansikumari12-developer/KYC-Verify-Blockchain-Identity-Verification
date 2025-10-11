@@ -19,7 +19,8 @@ const login = async (email: string, password: string): Promise<AuthResponse> => 
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) throw new Error("Login failed");
-  return res.json() as Promise<AuthResponse>;
+  const data = await res.json();
+  return data?.data as Promise<AuthResponse>;
 };
 
 const Auth = () => {
@@ -30,15 +31,16 @@ const Auth = () => {
   const mutation = useMutation<AuthResponse, Error, { email: string; password: string }>({
     mutationFn: ({ email, password }) => login(email, password),
     onSuccess: (data) => {
-      const fetchData = data.data
-      localStorage.setItem("token", fetchData.token);
+      localStorage.setItem("token", data.token);
+      const userinfo = data?.user
       toast({
         title: "✅ Login Successful",
-        description: `Welcome back, ${fetchData.user.email}`,
+        description: `Welcome back, ${userinfo?.email}`,
       });
       navigate("/submit-identity");
     },
-    onError: () => {
+    onError: (err) => {
+      console.error(err)
       toast({
         title: "Login Failed",
         description: "Invalid credentials",

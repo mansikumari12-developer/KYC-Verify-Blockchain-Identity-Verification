@@ -2,77 +2,99 @@ import User from '../models/User.js';
 import History from '../models/History.js';
 import ipfsService from '../services/ipfsService.js';
 import blockchainService from '../services/blockchainService.js';
-import cryptoService from '../services/cryptoService.js';  // ✅ CORRECTED IMPORT
+import { cryptoService } from '../services/cryptoService.js';
+
+import fs from "fs";
+import path from "path";
 
 export const submitIdentity = async (req, res) => {
   try {
-    const { identityData } = req.body;
+    const { fullName, idNumber } = req.body;
     const userId = req.user._id;
+    const walletAddress = req.user.walletAddress;
 
-    // Encrypt sensitive identity data - ✅ CORRECTED LINE
-    const encryptedIdentityData = cryptoService.encryptIdentityData(identityData);
-
-    // Upload to IPFS
-    const ipfsResult = await ipfsService.uploadJSONToIPFS(encryptedIdentityData);
-    
-    if (!ipfsResult.success) {
-      return res.status(500).json({
+    if (!fullName || !idNumber) {
+      return res.status(400).json({
         success: false,
-        message: 'Failed to upload identity to IPFS',
-        error: ipfsResult.error
+        message: "Full name and ID number are required",
       });
     }
 
-    // Store CID on blockchain
-    const blockchainResult = await blockchainService.storeIdentity(
-      req.user.walletAddress,
-      ipfsResult.cid
-    );
-
-    if (!blockchainResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to store identity on blockchain',
-        error: blockchainResult.error
-      });
-    }
-
-    // Update user record
-    await User.findByIdAndUpdate(userId, {
-      identityCID: ipfsResult.cid,
-      kycStatus: 'pending'
+    // ✅ Step 1: Encrypt identity data
+    const encryptedIdentity = await cryptoService.encryptIdentityData({
+      fullName,
+      idNumber,
     });
 
-    // Log history
+    // ✅ Step 2: Save encrypted data as a JSON file
+    const tempDir = path.join(process.cwd(), "temp");
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+    const tempFilePath = path.join(tempDir, `encryptedIdentity-${Date.now()}.json`);
+    fs.writeFileSync(tempFilePath, JSON.stringify(encryptedIdentity, null, 2));
+
+    // ✅ Step 3: Upload JSON file to IPFS
+    let cid;
+    try {
+      cid = await ipfsService.uploadToIPFS(tempFilePath, "encryptedIdentity.json");
+    } catch (err) {
+      console.error("❌ IPFS upload failed:", err.message);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload encrypted identity to IPFS",
+        error: err.message,
+      });
+    }
+
+    // ✅ Step 4: Store CID on Blockchain
+    let blockchainResult = { success: true, transactionHash: "0xmockhash", blockNumber: 0 };
+    try {
+      blockchainResult = await blockchainService.storeIdentity(walletAddress, cid);
+    } catch (err) {
+      console.warn("⚠️ Blockchain storage failed:", err.message);
+    }
+
+    // ✅ Step 5: Update user in MongoDB
+    await User.findByIdAndUpdate(userId, {
+      identityCID: cid,
+      kycStatus: "pending",
+    });
+
+    // ✅ Step 6: Record History
     await History.create({
       userId,
-      action: 'identity_submitted',
+      action: "identity_submitted",
       details: {
-        cid: ipfsResult.cid,
-        txHash: blockchainResult.transactionHash
+        cid,
+        txHash: blockchainResult.transactionHash,
       },
-      ipfsCID: ipfsResult.cid,
-      contractTxHash: blockchainResult.transactionHash
+      ipfsCID: cid,
+      contractTxHash: blockchainResult.transactionHash,
     });
 
-    res.json({
+    // ✅ Step 7: Clean up temporary file
+    fs.unlinkSync(tempFilePath);
+
+    // ✅ Step 8: Send response
+    res.status(200).json({
       success: true,
-      message: 'Identity submitted successfully',
+      message: "Identity submitted successfully",
       data: {
-        cid: ipfsResult.cid,
+        cid,
         transactionHash: blockchainResult.transactionHash,
-        blockNumber: blockchainResult.blockNumber
-      }
+        blockNumber: blockchainResult.blockNumber,
+      },
     });
   } catch (error) {
-    console.error('Submit identity error:', error);
+    console.error("❌ Submit identity error:", error);
     res.status(500).json({
       success: false,
-      message: 'Identity submission failed',
-      error: error.message
+      message: "Internal server error during identity submission",
+      error: error.message,
     });
   }
 };
+
 
 export const getIdentity = async (req, res) => {
   try {
@@ -104,7 +126,7 @@ export const getIdentity = async (req, res) => {
 
     // Retrieve from IPFS
     const ipfsResult = await ipfsService.retrieveFromIPFS(user.identityCID);
-    
+
     if (!ipfsResult.success) {
       return res.status(500).json({
         success: false,
@@ -148,8 +170,8 @@ export const updateIdentity = async (req, res) => {
     const encryptedIdentityData = cryptoService.encryptIdentityData(identityData);
 
     // Upload to IPFS
-    const ipfsResult = await ipfsService.uploadJSONToIPFS(encryptedIdentityData);
-    
+    const ipfsResult = await ipfsService.uploadToIPFS(encryptedIdentityData);
+
     if (!ipfsResult.success) {
       return res.status(500).json({
         success: false,

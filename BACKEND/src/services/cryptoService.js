@@ -1,69 +1,70 @@
-import CryptoJS from 'crypto-js';
+import crypto from "crypto";
+import CryptoJS from "crypto-js";
 
-class CryptoService {
-  constructor() {
-    this.secretKey = process.env.JWT_SECRET;
-  }
+// ✅ Environment-based secret keys
 
-  encrypt(text) {
-    return CryptoJS.AES.encrypt(text, this.secretKey).toString();
-  }
+const ENCRYPTION_KEY = process.env.ENCRYPTION_SECRET_KEY || "myverysecureencryptionkey1234567";
+const IV_LENGTH = 16;
+const SECRET_KEY = process.env.JWT_SECRET || "defaultsecretkey";
 
-  decrypt(ciphertext) {
-    const bytes = CryptoJS.AES.decrypt(ciphertext, this.secretKey);
-    return bytes.toString(CryptoJS.enc.Utf8);
-  }
+// =============================
+// 🔒 BASIC STRING ENCRYPTION
+// =============================
+export const encrypt = (text) => {
+  return CryptoJS.AES.encrypt(text, SECRET_KEY).toString();
+};
 
-  encryptObject(obj) {
-    const jsonString = JSON.stringify(obj);
-    return this.encrypt(jsonString);
-  }
+export const decrypt = (ciphertext) => {
+  const bytes = CryptoJS.AES.decrypt(ciphertext, SECRET_KEY);
+  return bytes.toString(CryptoJS.enc.Utf8);
+};
 
-  decryptObject(ciphertext) {
-    const decrypted = this.decrypt(ciphertext);
-    return JSON.parse(decrypted);
-  }
+// =============================
+// 🔒 OBJECT ENCRYPTION USING AES-256-CBC (Node Crypto)
+// =============================
+export const encryptIdentityData = async (data) => {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY), iv);
 
-  // For sensitive identity data
-  encryptIdentityData(identityData) {
-    const sensitiveFields = ['ssn', 'passportNumber', 'driversLicense', 'taxId'];
-    const encryptedData = { ...identityData };
+  let encrypted = cipher.update(JSON.stringify(data));
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
 
-    sensitiveFields.forEach(field => {
-      if (encryptedData[field]) {
-        encryptedData[field] = this.encrypt(encryptedData[field]);
-      }
-    });
+  return {
+    iv: iv.toString("hex"),
+    encryptedData: encrypted.toString("hex"),
+  };
+};
 
-    return encryptedData;
-  }
+export const decryptIdentityData = async (encryptedObject) => {
+  const iv = Buffer.from(encryptedObject.iv, "hex");
+  const encryptedText = Buffer.from(encryptedObject.encryptedData, "hex");
 
-  decryptIdentityData(encryptedIdentityData) {
-    const sensitiveFields = ['ssn', 'passportNumber', 'driversLicense', 'taxId'];
-    const decryptedData = { ...encryptedIdentityData };
+  const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY), iv);
+  let decrypted = decipher.update(encryptedText);
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
 
-    sensitiveFields.forEach(field => {
-      if (decryptedData[field]) {
-        try {
-          decryptedData[field] = this.decrypt(decryptedData[field]);
-        } catch (error) {
-          console.error(`Error decrypting field ${field}:`, error);
-        }
-      }
-    });
+  return JSON.parse(decrypted.toString());
+};
 
-    return decryptedData;
-  }
+// =============================
+// 🔑 DATA INTEGRITY HASHING
+// =============================
+export const generateHash = (data) => {
+  return CryptoJS.SHA256(JSON.stringify(data)).toString();
+};
 
-  // Generate hash for data integrity
-  generateHash(data) {
-    return CryptoJS.SHA256(JSON.stringify(data)).toString();
-  }
+export const verifyHash = (data, hash) => {
+  return generateHash(data) === hash;
+};
 
-  // Verify data integrity
-  verifyHash(data, hash) {
-    return this.generateHash(data) === hash;
-  }
-}
-
-export default new CryptoService();
+// =============================
+// 🧩 EXPORT ALL
+// =============================
+export const cryptoService = {
+  encrypt,
+  decrypt,
+  encryptIdentityData,
+  decryptIdentityData,
+  generateHash,
+  verifyHash,
+};

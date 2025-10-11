@@ -1,23 +1,43 @@
 // services/ipfsService.js
 import { PinataSDK } from "pinata-web3";
 import fs from "fs";
+import { Blob } from "buffer";
 
-const PINATA_API_KEY = process.env.PINATA_API_KEY;
-const PINATA_SECRET_KEY = process.env.PINATA_SECRET_KEY;
-
-// Client
 const pinata = new PinataSDK({
-  pinataApiKey: PINATA_API_KEY,
-  pinataSecretApiKey: PINATA_SECRET_KEY,
+  pinataJwt: `Bearer ${process.env.PINATA_JWT}`,
 });
 
-// Upload file
 export async function uploadToIPFS(filePath, fileName) {
-  const readableStream = fs.createReadStream(filePath);
-  const result = await pinata.pinFileToIPFS(readableStream, {
-    metadata: { name: fileName },
-  });
-  return result.IpfsHash;
+  try {
+    console.log("📤 Uploading file to IPFS:", filePath);
+
+    // ✅ Verify file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found at path: ${filePath}`);
+    }
+
+    // ✅ Read file
+    const fileBuffer = fs.readFileSync(filePath);
+    const fileBlob = new Blob([fileBuffer]);
+
+    // ✅ Upload
+    const result = await pinata.upload.file(fileBlob, {
+      metadata: { name: fileName },
+    });
+
+    console.log("✅ IPFS upload result:", result);
+
+    const cid = result.IpfsHash || result.cid || result.id;
+
+    if (!cid) {
+      throw new Error("Pinata did not return a CID or IpfsHash");
+    }
+
+    return cid;
+  } catch (error) {
+    console.error("❌ IPFS Upload Error:", error);
+    throw new Error(error.message || "Failed to upload file to IPFS");
+  }
 }
 
 export default { uploadToIPFS };
