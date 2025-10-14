@@ -1,12 +1,12 @@
+// backend/src/routes/uploadRoutes.js
 import express from 'express';
 import { authenticate } from '../middleware/authMiddleware.js';
-import { uploadMiddleware, uploadDocument, getDocument } from '../controllers/uploadController.js';
+import { uploadMiddleware, uploadDocument } from '../controllers/uploadController.js';
 
 const router = express.Router();
-
 router.use(authenticate);
 
+// ✅ POST multiple documents
 router.post('/', uploadMiddleware, uploadDocument);
-router.get('/:cid', getDocument);
 
 export default router;

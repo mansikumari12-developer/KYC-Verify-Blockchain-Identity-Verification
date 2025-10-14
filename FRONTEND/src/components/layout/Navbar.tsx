@@ -2,15 +2,12 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Shield, Menu, X, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { useWallet } from "@/context/WalletContext";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [walletAddress, setWalletAddress] = useState("");
-  const [isConnecting, setIsConnecting] = useState(false);
+  const { walletConnected, walletAddress, walletLogin } = useWallet();
   const location = useLocation();
-  const { toast } = useToast();
 
   const navItems = [
     { href: "/", label: "Home" },
@@ -24,32 +21,16 @@ const Navbar = () => {
     { href: "/admin", label: "Admin" },
   ];
 
-  const connectWallet = async () => {
-    setIsConnecting(true);
+  const isActive = (href: string) => location.pathname === href;
+
+  const onConnectClick = async () => {
     try {
-      // Simulate MetaMask connection delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const mockAddress = "0x742d35Cc6634C0532925a3b8D93B9D8b8C4b8CdE";
-      setWalletAddress(mockAddress);
-      setWalletConnected(true);
-      
-      toast({
-        title: "Wallet Connected",
-        description: `Successfully connected to ${mockAddress.slice(0, 6)}...${mockAddress.slice(-4)}`,
-      });
-    } catch (error) {
-      toast({
-        title: "Connection Failed",
-        description: "Please install MetaMask to connect your wallet",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
+      // call centralized walletLogin -- will store token/user (no redirect)
+      await walletLogin();
+    } catch (e) {
+      // already handled by context
     }
   };
-
-  const isActive = (href: string) => location.pathname === href;
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-md">
@@ -70,9 +51,7 @@ const Navbar = () => {
                 key={item.href}
                 to={item.href}
                 className={`relative px-3 py-2 text-sm font-medium transition-all duration-300 ${
-                  isActive(item.href)
-                    ? "text-primary-start nav-link-active"
-                    : "text-muted-foreground hover:text-foreground"
+                  isActive(item.href) ? "text-primary-start nav-link-active" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {item.label}
@@ -90,20 +69,15 @@ const Navbar = () => {
                 </span>
               </div>
             ) : (
-              <Button onClick={connectWallet} variant="gradient" className="px-6 py-2" disabled={isConnecting}>
-                {isConnecting ? "Connecting..." : "Connect Wallet"}
+              <Button onClick={onConnectClick} variant="gradient" className="px-6 py-2">
+                Connect Wallet
               </Button>
             )}
           </div>
 
-          {/* Mobile menu button */}
+          {/* Mobile Menu Button */}
           <div className="md:hidden">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsOpen(!isOpen)}
-              className="text-foreground"
-            >
+            <Button variant="ghost" size="sm" onClick={() => setIsOpen(!isOpen)} className="text-foreground">
               {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </Button>
           </div>
@@ -119,9 +93,7 @@ const Navbar = () => {
                   to={item.href}
                   onClick={() => setIsOpen(false)}
                   className={`block rounded-md px-3 py-2 text-base font-medium transition-all duration-300 ${
-                    isActive(item.href)
-                      ? "bg-gradient-primary text-white shadow-lg"
-                      : "text-muted-foreground hover:bg-card hover:text-foreground"
+                    isActive(item.href) ? "bg-gradient-primary text-white shadow-lg" : "text-muted-foreground hover:bg-card hover:text-foreground"
                   }`}
                 >
                   {item.label}
@@ -136,8 +108,8 @@ const Navbar = () => {
                     </span>
                   </div>
                 ) : (
-                  <Button onClick={connectWallet} variant="gradient" className="w-full" disabled={isConnecting}>
-                    {isConnecting ? "Connecting..." : "Connect Wallet"}
+                  <Button onClick={onConnectClick} variant="gradient" className="w-full">
+                    Connect Wallet
                   </Button>
                 )}
               </div>

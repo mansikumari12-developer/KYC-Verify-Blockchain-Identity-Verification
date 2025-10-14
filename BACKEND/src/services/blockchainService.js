@@ -1,77 +1,140 @@
+// backend/src/services/blockchainService.js
 import { ethers } from "ethers";
-import dotenv from "dotenv";
 import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
 
 dotenv.config();
 
-// 🟢 Load .env values
-const RPC_URL = process.env.ETH_RPC_URL;
-const rawKey = (process.env.PRIVATE_KEY || "").trim(); // trim invisible chars
+// --- Load environment variables ---
+const PROVIDER_URL = process.env.PROVIDER_URL || process.env.ETH_RPC_URL;
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const CONTRACT_ABI_PATH = process.env.CONTRACT_ABI_PATH;
+const CONTRACT_ABI_PATH = process.env.CONTRACT_ABI_PATH || "./src/abi/KycRegistry.json";
 
-// 🟢 Debugging output
-console.log("➡️ Loaded PRIVATE_KEY length:", rawKey.length);
-if (!rawKey.startsWith("0x")) {
-  console.error("❌ PRIVATE_KEY must start with 0x");
-}
-if (rawKey.length !== 66) {
-  console.error("❌ PRIVATE_KEY length must be 66 chars (0x + 64 hex). Current:", rawKey.length);
+// --- Warn if missing critical values ---
+if (!PROVIDER_URL || !PRIVATE_KEY || !CONTRACT_ADDRESS) {
+  console.warn("⚠️ Blockchain service missing env vars. Check PROVIDER_URL / PRIVATE_KEY / CONTRACT_ADDRESS / CONTRACT_ABI_PATH");
 }
 
-// 🟢 Setup provider
-const provider = new ethers.JsonRpcProvider(RPC_URL);
-
-// 🟢 Setup wallet safely
-let wallet;
+// --- Load ABI ---
+let CONTRACT_ABI = [];
 try {
-  wallet = new ethers.Wallet(rawKey, provider);
-  console.log("✅ Wallet initialized:", wallet.address);
+  const abiPath = path.resolve(CONTRACT_ABI_PATH);
+  const abiContent = fs.readFileSync(abiPath, "utf8");
+  CONTRACT_ABI = JSON.parse(abiContent).abi || JSON.parse(abiContent);
 } catch (err) {
-  console.error("❌ Wallet init failed:", err.message);
-  process.exit(1); // stop backend if wallet invalid
+  console.error("❌ Error reading contract ABI:", err.message);
 }
 
-// 🟢 Load contract ABI
-const abi = JSON.parse(fs.readFileSync(CONTRACT_ABI_PATH, "utf8"));
+// --- Initialize provider, wallet, and contract ---
+let provider, wallet, contract;
+try {
+  provider = new ethers.JsonRpcProvider(PROVIDER_URL);
+  wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+  contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, wallet);
+  console.log("✅ Blockchain service initialized successfully");
+} catch (err) {
+  console.error("⚠️ Blockchain init failed:", err.message);
+}
 
-// 🟢 Setup contract instance
-const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, wallet);
-
-export async function storeIdentity(cid) {
+// --- Store identity CID on-chain ---
+export const storeIdentity = async (walletAddress, cid) => {
   try {
-    const tx = await contract.storeIdentity(cid);
-    console.log("🟢 Identity submitted, tx hash:", tx.hash);
-    return await tx.wait();
-  } catch (err) {
-    console.error("❌ storeIdentity error:", err.message);
-    throw err;
-  }
-}
+    if (!contract) throw new Error("Contract not initialized");
 
-export async function setStatus(user, status) {
-  try {
-    const tx = await contract.setStatus(user, status);
-    console.log("🟢 Status updated, tx hash:", tx.hash);
-    return await tx.wait();
-  } catch (err) {
-    console.error("❌ setStatus error:", err.message);
-    throw err;
-  }
-}
+    const tx = await contract.storeIdentity(walletAddress, cid);
+    const receipt = await tx.wait();
 
-export async function getIdentity(user) {
-  try {
-    const [cid, status] = await contract.getIdentity(user);
-    return { cid, status };
+    console.log("✅ Stored on blockchain:", receipt.transactionHash);
+
+    return {
+      success: true,
+      transactionHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber,
+    };
   } catch (err) {
-    console.error("❌ getIdentity error:", err.message);
-    throw err;
+    console.error("storeIdentity error:", err.message);
+    return {
+      success: false,
+      error: err.message,
+    };
   }
-}
+};
+
+// --- Grant access to an organization ---
+export const grantAccess = async (orgWallet, userWallet) => {
+  try {
+    if (!contract) throw new Error("Contract not initialized");
+
+    const tx = await contract.grantAccess(orgWallet, userWallet);
+    const receipt = await tx.wait();
+
+    console.log(`✅ Access granted: ${userWallet} to ${orgWallet}`);
+
+    return {
+      success: true,
+      transactionHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber,
+    };
+  } catch (err) {
+    console.error("grantAccess error:", err.message);
+    return {
+      success: false,
+      error: err.message,
+    };
+  }
+};
+
+// --- Revoke access ---
+export const revokeAccess = async (orgWallet, userWallet) => {
+  try {
+    if (!contract) throw new Error("Contract not initialized");
+
+    const tx = await contract.revokeAccess(orgWallet, userWallet);
+    const receipt = await tx.wait();
+
+    console.log(`🚫 Access revoked: ${userWallet} from ${orgWallet}`);
+
+    return {
+      success: true,
+      transactionHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber,
+    };
+  } catch (err) {
+    console.error("revokeAccess error:", err.message);
+    return {
+      success: false,
+      error: err.message,
+    };
+  }
+};
+
+// --- Check access (view-only call, no gas used) ---
+export const hasAccess = async (orgWallet, userWallet) => {
+  try {
+    if (!contract) throw new Error("Contract not initialized");
+
+    const hasAccessValue = await contract.hasAccess(orgWallet, userWallet);
+
+    console.log(`🔍 Access check: ${userWallet} -> ${orgWallet}: ${hasAccessValue}`);
+
+    return {
+      success: true,
+      hasAccess: Boolean(hasAccessValue),
+    };
+  } catch (err) {
+    console.error("hasAccess error:", err.message);
+    return {
+      success: false,
+      error: err.message,
+    };
+  }
+};
 
 export default {
   storeIdentity,
-  setStatus,
-  getIdentity,
+  grantAccess,
+  revokeAccess,
+  hasAccess,
 };

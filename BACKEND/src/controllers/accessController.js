@@ -1,17 +1,20 @@
-import User from '../models/User.js';
-import History from '../models/History.js';
-import blockchainService from '../services/blockchainService.js';
+import User from "../models/User.js";
+import History from "../models/History.js";
+import * as blockchainService from "../services/blockchainService.js"; // ✅ updated import
 
+// =========================
+// 🚀 Grant Access
+// =========================
 export const grantAccess = async (req, res) => {
   try {
     const { targetUserId, orgWallet } = req.body;
     const grantingUser = req.user;
 
-    // Verify granting user has permission (org or admin)
-    if (grantingUser.role !== 'org' && grantingUser.role !== 'admin') {
+    // ✅ Only orgs/admins can grant access
+    if (grantingUser.role !== "org" && grantingUser.role !== "admin") {
       return res.status(403).json({
         success: false,
-        message: 'Only organizations can grant access'
+        message: "Only organizations can grant access",
       });
     }
 
@@ -19,11 +22,11 @@ export const grantAccess = async (req, res) => {
     if (!targetUser) {
       return res.status(404).json({
         success: false,
-        message: 'Target user not found'
+        message: "Target user not found",
       });
     }
 
-    // Grant access on blockchain
+    // ✅ Call blockchain grant function
     const blockchainResult = await blockchainService.grantAccess(
       orgWallet || grantingUser.walletAddress,
       targetUser.walletAddress
@@ -32,27 +35,27 @@ export const grantAccess = async (req, res) => {
     if (!blockchainResult.success) {
       return res.status(500).json({
         success: false,
-        message: 'Failed to grant access on blockchain',
-        error: blockchainResult.error
+        message: "Failed to grant access on blockchain",
+        error: blockchainResult.error,
       });
     }
 
-    // Log history
+    // ✅ Log history
     await History.create({
       userId: targetUserId,
-      action: 'access_granted',
+      action: "access_granted",
       details: {
         grantedBy: grantingUser._id,
         organization: orgWallet || grantingUser.walletAddress,
-        txHash: blockchainResult.transactionHash
+        txHash: blockchainResult.transactionHash,
       },
       organization: orgWallet || grantingUser.walletAddress,
-      contractTxHash: blockchainResult.transactionHash
+      contractTxHash: blockchainResult.transactionHash,
     });
 
     res.json({
       success: true,
-      message: 'Access granted successfully',
+      message: "Access granted successfully",
       data: {
         transactionHash: blockchainResult.transactionHash,
         blockNumber: blockchainResult.blockNumber,
@@ -60,30 +63,32 @@ export const grantAccess = async (req, res) => {
         targetUser: {
           id: targetUser._id,
           name: targetUser.name,
-          email: targetUser.email
-        }
-      }
+          email: targetUser.email,
+        },
+      },
     });
   } catch (error) {
-    console.error('Grant access error:', error);
+    console.error("Grant access error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to grant access',
-      error: error.message
+      message: "Failed to grant access",
+      error: error.message,
     });
   }
 };
 
+// =========================
+// 🚫 Revoke Access
+// =========================
 export const revokeAccess = async (req, res) => {
   try {
     const { targetUserId, orgWallet } = req.body;
     const revokingUser = req.user;
 
-    // Verify revoking user has permission
-    if (revokingUser.role !== 'org' && revokingUser.role !== 'admin') {
+    if (revokingUser.role !== "org" && revokingUser.role !== "admin") {
       return res.status(403).json({
         success: false,
-        message: 'Only organizations can revoke access'
+        message: "Only organizations can revoke access",
       });
     }
 
@@ -91,11 +96,10 @@ export const revokeAccess = async (req, res) => {
     if (!targetUser) {
       return res.status(404).json({
         success: false,
-        message: 'Target user not found'
+        message: "Target user not found",
       });
     }
 
-    // Revoke access on blockchain
     const blockchainResult = await blockchainService.revokeAccess(
       orgWallet || revokingUser.walletAddress,
       targetUser.walletAddress
@@ -104,27 +108,26 @@ export const revokeAccess = async (req, res) => {
     if (!blockchainResult.success) {
       return res.status(500).json({
         success: false,
-        message: 'Failed to revoke access on blockchain',
-        error: blockchainResult.error
+        message: "Failed to revoke access on blockchain",
+        error: blockchainResult.error,
       });
     }
 
-    // Log history
     await History.create({
       userId: targetUserId,
-      action: 'access_revoked',
+      action: "access_revoked",
       details: {
         revokedBy: revokingUser._id,
         organization: orgWallet || revokingUser.walletAddress,
-        txHash: blockchainResult.transactionHash
+        txHash: blockchainResult.transactionHash,
       },
       organization: orgWallet || revokingUser.walletAddress,
-      contractTxHash: blockchainResult.transactionHash
+      contractTxHash: blockchainResult.transactionHash,
     });
 
     res.json({
       success: true,
-      message: 'Access revoked successfully',
+      message: "Access revoked successfully",
       data: {
         transactionHash: blockchainResult.transactionHash,
         blockNumber: blockchainResult.blockNumber,
@@ -132,30 +135,36 @@ export const revokeAccess = async (req, res) => {
         targetUser: {
           id: targetUser._id,
           name: targetUser.name,
-          email: targetUser.email
-        }
-      }
+          email: targetUser.email,
+        },
+      },
     });
   } catch (error) {
-    console.error('Revoke access error:', error);
+    console.error("Revoke access error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to revoke access',
-      error: error.message
+      message: "Failed to revoke access",
+      error: error.message,
     });
   }
 };
 
+// =========================
+// 📜 Get Access List
+// =========================
 export const getAccessList = async (req, res) => {
   try {
     const { userId } = req.params;
     const requestingUser = req.user;
 
-    // Users can only see their own access list unless they're an org/admin
-    if (requestingUser.role === 'user' && requestingUser._id.toString() !== userId) {
+    // ✅ Users can only see their own list unless org/admin
+    if (
+      requestingUser.role === "user" &&
+      requestingUser._id.toString() !== userId
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: "Access denied",
       });
     }
 
@@ -163,23 +172,22 @@ export const getAccessList = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
-    // Get access history from database
     const accessHistory = await History.find({
       userId,
-      action: { $in: ['access_granted', 'access_revoked'] }
+      action: { $in: ["access_granted", "access_revoked"] },
     }).sort({ createdAt: -1 });
 
-    // Get current access from blockchain (simplified)
+    // Simplified current access state
     const currentAccess = accessHistory
-      .filter(record => record.action === 'access_granted')
-      .map(record => ({
+      .filter((record) => record.action === "access_granted")
+      .map((record) => ({
         organization: record.organization,
         grantedAt: record.createdAt,
-        grantedBy: record.details.grantedBy
+        grantedBy: record.details.grantedBy,
       }));
 
     res.json({
@@ -188,22 +196,25 @@ export const getAccessList = async (req, res) => {
         user: {
           id: user._id,
           name: user.name,
-          email: user.email
+          email: user.email,
         },
         currentAccess,
-        accessHistory
-      }
+        accessHistory,
+      },
     });
   } catch (error) {
-    console.error('Get access list error:', error);
+    console.error("Get access list error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get access list',
-      error: error.message
+      message: "Failed to get access list",
+      error: error.message,
     });
   }
 };
 
+// =========================
+// 🔍 Check Access
+// =========================
 export const checkAccess = async (req, res) => {
   try {
     const { targetUserId } = req.params;
@@ -213,7 +224,7 @@ export const checkAccess = async (req, res) => {
     if (!targetUser) {
       return res.status(404).json({
         success: false,
-        message: 'Target user not found'
+        message: "Target user not found",
       });
     }
 
@@ -229,16 +240,16 @@ export const checkAccess = async (req, res) => {
         targetUser: {
           id: targetUser._id,
           name: targetUser.name,
-          email: targetUser.email
-        }
-      }
+          email: targetUser.email,
+        },
+      },
     });
   } catch (error) {
-    console.error('Check access error:', error);
+    console.error("Check access error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to check access',
-      error: error.message
+      message: "Failed to check access",
+      error: error.message,
     });
   }
 };

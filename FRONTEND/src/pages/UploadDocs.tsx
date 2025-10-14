@@ -3,12 +3,28 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import WizardProgress from "@/components/ui/wizard-progress";
 import LoadingSpinner from "@/components/ui/loading-spinner";
-import { Upload, FileText, CheckCircle, ArrowRight, Shield, AlertCircle } from "lucide-react";
+import { Upload, FileText, CheckCircle, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import api from "@/services/api"; // 🔹 axios client
+import api from "@/services/api"; // Axios instance
+
+// ✅ Type for API response
+interface UploadAPIResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    cid: string;
+    fileName?: string;
+  };
+}
+
+// ✅ Type for uploaded file with CID
+interface UploadedFile {
+  file: File;
+  cid?: string;
+}
 
 const UploadDocs = () => {
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,22 +69,37 @@ const UploadDocs = () => {
     }
   };
 
-  // 🔹 Real Upload
   const uploadToBackend = async (files: File[]) => {
     setUploading(true);
     try {
       const fd = new FormData();
       files.forEach((file) => fd.append("files", file));
 
-      const res = await api.post("/upload", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not logged in");
+
+      // ✅ Axios POST with typed response
+      const res = await api.post<UploadAPIResponse>("/upload", fd, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 0, // Prevent ECONNABORTED for large files
       });
 
-      setUploadedFiles((prev) => [...prev, ...files]);
+      if (!res.data.success) throw new Error(res.data.message);
+
+      // Map files with returned CID
+      const newUploaded: UploadedFile[] = files.map((file) => ({
+        file,
+        cid: res.data.data?.cid,
+      }));
+
+      setUploadedFiles((prev) => [...prev, ...newUploaded]);
 
       toast({
         title: "✅ Upload Successful",
-        description: `Uploaded ${files.length} file(s)`,
+        description: `Uploaded ${files.length} file(s) successfully`,
       });
     } catch (err: any) {
       toast({
@@ -112,13 +143,9 @@ const UploadDocs = () => {
   return (
     <div className="min-h-screen py-12 px-4">
       <div className="mx-auto max-w-2xl">
-        {/* Progress */}
-        <div className="mb-8">
-          <WizardProgress currentStep={2} totalSteps={4} steps={wizardSteps} />
-        </div>
+        <WizardProgress currentStep={2} totalSteps={4} steps={wizardSteps} />
 
         <div className="glass-card p-8 fade-in">
-          {/* Header */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
               <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-primary">
@@ -131,16 +158,13 @@ const UploadDocs = () => {
             </p>
           </div>
 
-          {/* Upload Area */}
           <div className="mb-8">
             <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-border-light rounded-xl p-8 text-center cursor-pointer hover:border-primary-start hover:shadow-[0_0_20px_hsl(var(--glow-primary)/0.3)] transition-all duration-300"
             >
               <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">
-                Click to Upload Documents
-              </h3>
+              <h3 className="text-lg font-medium text-foreground mb-2">Click to Upload Documents</h3>
               <p className="text-muted-foreground mb-4">or drag & drop files here</p>
               <div className="text-sm text-muted-foreground">
                 Supported: PDF, JPEG, PNG • Max size: 5MB per file
@@ -156,7 +180,6 @@ const UploadDocs = () => {
             />
           </div>
 
-          {/* Upload Progress */}
           {uploading && (
             <div className="mb-6 p-4 bg-muted/20 border border-border-light rounded-lg">
               <div className="flex items-center space-x-3">
@@ -166,7 +189,6 @@ const UploadDocs = () => {
             </div>
           )}
 
-          {/* Errors */}
           {uploadErrors.length > 0 && (
             <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-lg">
               <h4 className="text-error font-medium mb-2">Upload Errors:</h4>
@@ -178,14 +200,13 @@ const UploadDocs = () => {
             </div>
           )}
 
-          {/* Uploaded Files */}
           {uploadedFiles.length > 0 && (
             <div className="mb-8">
               <h3 className="text-lg font-medium text-foreground mb-4">
                 Uploaded Documents ({uploadedFiles.length})
               </h3>
               <div className="space-y-3">
-                {uploadedFiles.map((file, index) => (
+                {uploadedFiles.map((fileObj, index) => (
                   <div
                     key={index}
                     className="flex items-center justify-between p-4 bg-muted/20 border border-border-light rounded-lg"
@@ -193,9 +214,10 @@ const UploadDocs = () => {
                     <div className="flex items-center space-x-3">
                       <FileText className="h-8 w-8 text-primary-start" />
                       <div>
-                        <div className="font-medium text-foreground">{file.name}</div>
+                        <div className="font-medium text-foreground">{fileObj.file.name}</div>
                         <div className="text-sm text-muted-foreground">
-                          {formatFileSize(file.size)} • {file.type.split("/")[1].toUpperCase()}
+                          {formatFileSize(fileObj.file.size)} •{" "}
+                          {fileObj.file.type.split("/")[1].toUpperCase()}
                         </div>
                       </div>
                     </div>
@@ -216,7 +238,6 @@ const UploadDocs = () => {
             </div>
           )}
 
-          {/* Continue */}
           <Button
             onClick={handleContinue}
             variant="gradient"

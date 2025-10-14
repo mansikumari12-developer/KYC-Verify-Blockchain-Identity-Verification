@@ -7,22 +7,30 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
-    mode === "development" && componentTagger()
+    // 🟣 Optional: only enable component tagger in development mode
+    mode === "development" && componentTagger(),
   ].filter(Boolean),
 
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      // ✅ Enables @/ imports like "@/context/WalletContext"
+      "@": path.resolve(__dirname, "src"),
     },
   },
 
   server: {
     proxy: {
       "/api": {
-        target: "http://localhost:4000", // 👈 backend URL
+        target: "http://localhost:4000", // 👈 Backend URL
         changeOrigin: true,
         secure: false,
+         timeout: 120000,
       },
     },
+  },
+
+  // 🟢 Optional quality-of-life additions
+  build: {
+    sourcemap: mode === "development",
   },
 }));
