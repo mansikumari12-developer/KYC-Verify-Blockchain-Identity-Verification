@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import WizardProgress from "@/components/ui/wizard-progress";
 import LoadingSpinner from "@/components/ui/loading-spinner";
+import Webcam from "react-webcam";
+import { ethers } from "ethers";
+import KycRegistryABI from "@/abi/KycRegistry.json";
 import { Camera, RotateCcw, ArrowRight, Eye, Smile, ArrowLeft, ArrowUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,6 +21,7 @@ const Verification = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isCapturing, setIsCapturing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string | null>(null);
+  const webcamRef = useRef<Webcam | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -33,73 +37,101 @@ const Verification = () => {
 
   const [steps, setSteps] = useState(livenessSteps);
 
+  const captureImage = async (): Promise<string | null> => {
+    if (!webcamRef.current) return null;
+    const imageSrc = webcamRef.current.getScreenshot();
+    return imageSrc || null;
+  };
+
+  const uploadToBackend = async (image: string, stepId: string) => {
+    const res = await fetch("/api/verification/liveness", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify({ image, step: stepId }),
+    });
+
+    if (!res.ok) throw new Error("Upload failed");
+    const data = await res.json();
+    return data.cid; // IPFS CID from backend
+  };
+
   const handleCapture = async () => {
-    if (currentStep < steps.length) {
-      setIsCapturing(true);
-      setProcessingStep(steps[currentStep].id);
+    if (currentStep >= steps.length) return;
 
-      try {
-        // ✅ Call backend API for this liveness step
-        const res = await fetch("/api/verification/liveness", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify({ step: steps[currentStep].id }),
-        });
+    setIsCapturing(true);
+    setProcessingStep(steps[currentStep].id);
 
-        if (!res.ok) throw new Error("Step verification failed");
+    try {
+      const image = await captureImage();
+      if (!image) throw new Error("No camera image captured");
 
-        setSteps(prev =>
-          prev.map((step, index) =>
-            index === currentStep ? { ...step, completed: true } : step
-          )
-        );
+      // Upload captured image → backend → IPFS
+      const cid = await uploadToBackend(image, steps[currentStep].id);
 
+      // Mark step complete
+      setSteps(prev =>
+        prev.map((s, i) => (i === currentStep ? { ...s, completed: true } : s))
+      );
+
+      toast({
+        title: "✅ Step Completed",
+        description: `${steps[currentStep].title} verified (CID: ${cid})`,
+      });
+
+      if (currentStep < steps.length - 1) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        // All steps done → finalize blockchain submission
+        await finalizeVerificationOnChain();
         toast({
-          title: "✅ Step Completed",
-          description: `${steps[currentStep].title} verified successfully`,
+          title: "🎉 Verification Complete",
+          description: "Your liveness verification is on-chain!",
         });
-
-        if (currentStep < steps.length - 1) {
-          setCurrentStep(currentStep + 1);
-        } else {
-          // ✅ Final verification complete
-          await fetch("/api/verification/complete", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          });
-
-          toast({
-            title: "🎉 Verification Complete",
-            description: "Your liveness verification has been submitted",
-          });
-
-          navigate("/status");
-        }
-      } catch (error: any) {
-        toast({
-          title: "❌ Capture Failed",
-          description: error.message || "Could not verify this step",
-          variant: "destructive",
-        });
-      } finally {
-        setIsCapturing(false);
-        setProcessingStep(null);
+        navigate("/status");
       }
+    } catch (err: any) {
+      toast({
+        title: "❌ Capture Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsCapturing(false);
+      setProcessingStep(null);
+    }
+  };
+
+  const finalizeVerificationOnChain = async () => {
+    try {
+      if (!(window as any).ethereum) throw new Error("MetaMask not detected");
+
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(
+        import.meta.env.VITE_CONTRACT_ADDRESS!,
+        KycRegistryABI,
+        signer
+      );
+
+      // Call the contract’s setStatus (example: 1 = verified)
+      const tx = await contract.setStatus(await signer.getAddress(), 1);
+      await tx.wait();
+      console.log("✅ On-chain verification done:", tx.hash);
+    } catch (error: any) {
+      console.error("❌ Blockchain Error:", error);
+      toast({
+        title: "Blockchain Error",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   };
 
   const handleRetake = () => {
-    setSteps(prev =>
-      prev.map((step, index) =>
-        index === currentStep ? { ...step, completed: false } : step
-      )
-    );
+    setSteps(livenessSteps);
     setCurrentStep(0);
     toast({
       title: "Verification Reset",
@@ -107,143 +139,79 @@ const Verification = () => {
     });
   };
 
-  const allStepsCompleted = steps.every(step => step.completed);
+  const allStepsCompleted = steps.every(s => s.completed);
   const currentStepData = steps[currentStep];
+  const Icon = currentStepData?.icon;
 
   return (
     <div className="min-h-screen py-12 px-4">
       <div className="mx-auto max-w-2xl">
-        <div className="mb-8">
-          <WizardProgress currentStep={3} totalSteps={4} steps={wizardSteps} />
-        </div>
+        <WizardProgress currentStep={3} totalSteps={4} steps={wizardSteps} />
 
         <div className="glass-card p-8 fade-in">
-          {/* Header */}
           <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-primary">
-                <Camera className="h-8 w-8 text-white" />
-              </div>
-            </div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">
-              Live Verification
-            </h1>
+            <h1 className="text-2xl font-bold">Live Verification</h1>
             <p className="text-muted-foreground">
-              Complete our Binance-style liveness check to verify your identity
+              Binance-style liveness check — please follow instructions
             </p>
           </div>
 
-          {/* Camera Frame */}
-          <div className="mb-8">
-            <div className="relative mx-auto w-80 h-80 rounded-full border-4 border-primary-start bg-card/50 flex items-center justify-center overflow-hidden">
-              <div className="w-full h-full bg-gradient-to-br from-background-secondary to-card flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-32 h-32 rounded-full bg-muted/30 mb-4 mx-auto flex items-center justify-center">
-                    <div className="w-24 h-24 rounded-full bg-muted/50 flex items-center justify-center">
-                      <Camera className="h-12 w-12 text-muted-foreground" />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">Camera Preview</p>
-                </div>
-              </div>
-
-              {isCapturing && (
-                <div className="absolute inset-0 bg-primary-start/20 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="animate-spin-slow w-16 h-16 border-4 border-white/30 border-t-white rounded-full mb-4" />
-                    <p className="text-white font-medium">Processing...</p>
-                  </div>
-                </div>
-              )}
+          {/* ✅ Live Camera */}
+          <div className="flex justify-center mb-8">
+            <div className="w-80 h-80 rounded-full overflow-hidden border-4 border-primary-start">
+              <Webcam
+                ref={webcamRef}
+                screenshotFormat="image/jpeg"
+                className="w-full h-full object-cover"
+                videoConstraints={{ facingMode: "user" }}
+              />
             </div>
           </div>
 
           {!allStepsCompleted ? (
             <>
               <div className="text-center mb-8">
-                <div className="flex justify-center mb-4">
-                  <currentStepData.icon className="h-8 w-8 text-primary-start" />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">
-                  {currentStepData.title}
-                </h3>
-                <p className="text-muted-foreground">
-                  {currentStepData.instruction}
-                </p>
+                {Icon && <Icon className="h-8 w-8 text-primary-start mx-auto mb-2" />}
+                <h3 className="text-xl font-semibold mb-2">{currentStepData.title}</h3>
+                <p className="text-muted-foreground">{currentStepData.instruction}</p>
               </div>
 
-              <div className="mb-8">
-                <div className="flex justify-center space-x-2 mb-4">
-                  {steps.map((step, index) => (
-                    <div
-                      key={step.id}
-                      className={`w-3 h-3 rounded-full transition-all duration-300 ${step.completed
-                          ? "bg-success"
-                          : index === currentStep
-                            ? "bg-primary-start"
-                            : "bg-muted"
-                        }`}
-                    />
-                  ))}
-                </div>
-                <p className="text-center text-sm text-muted-foreground">
-                  Step {currentStep + 1} of {steps.length}
-                </p>
+              <div className="flex justify-center space-x-2 mb-4">
+                {steps.map((s, i) => (
+                  <div
+                    key={s.id}
+                    className={`w-3 h-3 rounded-full ${s.completed ? "bg-success" : i === currentStep ? "bg-primary-start" : "bg-muted"
+                      }`}
+                  />
+                ))}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button
-                  onClick={handleCapture}
-                  disabled={isCapturing}
-                  variant="gradient"
-                  className="px-8 py-3 flex items-center space-x-2"
-                >
-                  {isCapturing ? (
-                    <>
-                      <LoadingSpinner size="sm" />
-                      <span>Processing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="h-4 w-4" />
-                      <span>Capture</span>
-                    </>
-                  )}
+                <Button onClick={handleCapture} disabled={isCapturing} variant="gradient">
+                  {isCapturing ? <LoadingSpinner size="sm" /> : <Camera className="h-4 w-4 mr-2" />}
+                  {isCapturing ? "Processing..." : "Capture"}
                 </Button>
 
-                <Button
-                  onClick={handleRetake}
-                  variant="secondary"
-                  className="px-8 py-3 flex items-center space-x-2"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  <span>Retake</span>
+                <Button onClick={handleRetake} variant="secondary">
+                  <RotateCcw className="h-4 w-4 mr-2" /> Retake
                 </Button>
               </div>
             </>
           ) : (
-            <>
-              <div className="text-center mb-8">
-                <div className="w-20 h-20 rounded-full bg-success mx-auto mb-4 flex items-center justify-center">
-                  <div className="w-8 h-8 border-l-2 border-b-2 border-white transform rotate-[-45deg] success-check" />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">
-                  Liveness Verification Complete!
-                </h3>
-                <p className="text-muted-foreground">
-                  All verification steps completed successfully
-                </p>
+            <div className="text-center">
+              <div className="w-20 h-20 rounded-full bg-success mx-auto mb-4 flex items-center justify-center">
+                <div className="w-8 h-8 border-l-2 border-b-2 border-white rotate-[-45deg]" />
               </div>
-
-              <Button
-                onClick={() => navigate("/status")}
-                variant="gradient"
-                className="w-full py-3 flex items-center justify-center space-x-2"
-              >
-                <span>View Verification Status</span>
-                <ArrowRight className="h-4 w-4" />
+              <h3 className="text-xl font-semibold mb-2">
+                Liveness Verification Complete!
+              </h3>
+              <p className="text-muted-foreground mb-6">
+                All verification steps completed successfully
+              </p>
+              <Button onClick={() => navigate("/status")} variant="gradient">
+                <ArrowRight className="h-4 w-4 mr-2" /> View Verification Status
               </Button>
-            </>
+            </div>
           )}
         </div>
       </div>
