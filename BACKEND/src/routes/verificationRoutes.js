@@ -1,17 +1,20 @@
 // backend/src/routes/verificationRoutes.js
-
 import express from "express";
 import multer from "multer";
-import { livenessStep } from "../controllers/verificationController.js";
-import { authenticate } from "../middleware/authMiddleware.js"; // ✅ fixed import
+import {
+  livenessStep,
+  getVerificationStatus,
+} from "../controllers/verificationController.js";
+import { authenticate } from "../middleware/authMiddleware.js";
 
-// ✅ Use memory storage for IPFS uploads
+// Use memory storage for IPFS uploads
 const upload = multer({ storage: multer.memoryStorage() });
-
 const router = express.Router();
 
-// ✅ Liveness step upload route
-// Frontend sends FormData: { step, file }
+// ✅ Liveness step upload
 router.post("/liveness", authenticate, upload.single("file"), livenessStep);
+
+// ✅ Get verification status
+router.get("/status", authenticate, getVerificationStatus);
 
 export default router;
