@@ -44,13 +44,17 @@ const Verification = () => {
   };
 
   const uploadToBackend = async (image: string, stepId: string) => {
+    // Upload captured image to backend
+    const formData = new FormData();
+    const blob = await fetch(image).then(res => res.blob());
+    formData.append("file", blob, "capture.png");    
+    formData.append("step", stepId);
     const res = await fetch("/api/verification/liveness", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         Authorization: `Bearer ${localStorage.getItem("token")}`,
       },
-      body: JSON.stringify({ image, step: stepId }),
+      body: formData,
     });
 
     if (!res.ok) throw new Error("Upload failed");

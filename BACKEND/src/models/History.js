@@ -15,6 +15,7 @@ const historySchema = new mongoose.Schema({
       'verification_completed',
       'access_granted',
       'access_revoked',
+      "liveness_step_submitted",
       'document_uploaded'
     ]
   },

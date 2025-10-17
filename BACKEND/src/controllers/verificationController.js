@@ -10,7 +10,6 @@ export const livenessStep = async (req, res) => {
     const userId = req.user._id;
     const step = req.body.step;
     const file = req.file;
-
     if (!step) return res.status(400).json({ success: false, message: "Missing step" });
     if (!file) return res.status(400).json({ success: false, message: "Missing file" });
 
