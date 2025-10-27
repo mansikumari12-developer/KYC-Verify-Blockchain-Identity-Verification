@@ -26,7 +26,7 @@ const app = express();
 
 // ✅ CORS Fix
 app.use(cors({
-  origin: "http://localhost:3000", // Change to your frontend URL
+  origin: process.env.FRONTEND_URL, // Change to your frontend URL
   credentials: true,               // Allow cookies/JWT headers
 }));
 
