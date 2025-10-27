@@ -3,51 +3,47 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// 🟢 Export Vite configuration
 export default defineConfig(({ mode }) => {
-  // Load .env variables based on current mode (development or production)
   const env = loadEnv(mode, process.cwd(), "");
 
-  const apiUrl = env.VITE_API_URL || "http://localhost:4000";
+  // ✅ Fallback: use Render backend when deploying
+  const apiUrl =
+    mode === "development"
+      ? env.VITE_API_URL || "http://localhost:4000"
+      : "https://your-backend-name.onrender.com";
 
   return {
     plugins: [
       react(),
-      // 🟣 Enable lovable-tagger only in development mode
       mode === "development" && componentTagger(),
     ].filter(Boolean),
 
     resolve: {
       alias: {
-        // ✅ Enables @ imports like "@/components/Button"
         "@": path.resolve(__dirname, "src"),
       },
     },
 
+    // ✅ Development proxy for localhost
     server: {
-      host: true, // allow LAN access
-      port: 5173,
-      open: true, // auto open browser
       proxy: {
         "/api": {
-          target: apiUrl, // 👈 Use environment variable
+          target: apiUrl,
           changeOrigin: true,
           secure: false,
-          timeout: 120000,
+          rewrite: (path) => path.replace(/^\/api/, "/api"),
         },
       },
+    },
+
+    // ✅ Replace /api/ calls in built code with live backend URL
+    define: {
+      __API_URL__: JSON.stringify(apiUrl),
     },
 
     build: {
       outDir: "dist",
       sourcemap: mode === "development",
-      rollupOptions: {
-        output: {
-          manualChunks: undefined,
-        },
-      },
     },
-
-    envPrefix: "VITE_", // ✅ Ensures only VITE_ variables are exposed to client
   };
 });
